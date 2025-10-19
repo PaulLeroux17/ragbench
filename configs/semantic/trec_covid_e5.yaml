@@ -1,0 +1,20 @@
+dataset: trec-covid
+split: test
+
+model: "intfloat/e5-large-v2"
+query_prompt: "query"
+passage_prompt: "passage"
+max_length: 512
+
+top_k: 1000
+k_values:
+  - 10
+  - 100
+
+batch_size: 128
+corpus_chunk_size: 50000
+max_queries: null
+
+out_dir: "results"
+save_runfile: true
+print_topk: 0

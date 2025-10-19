@@ -1,0 +1,20 @@
+beir
+pyserini
+pandas
+tqdm
+rich
+psutil
+pyyaml
+numpy
+matplotlib
+numpy
+faiss-cpu
+torch
+nvidia-smi
+
+
+# Optional
+ir_datasets
+pytrec_eval
+sentence-transformers
+requests

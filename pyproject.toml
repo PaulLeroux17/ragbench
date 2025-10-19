@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragbench-cli"
+version = "0.1.0"
+description = "Tiny dispatcher CLI to run /app/scripts/run_*.py"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+ragbench = "ragbench_cli.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ragbench_cli*"]

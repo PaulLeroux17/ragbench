@@ -1,0 +1,37 @@
+# RAGBench - Dockerized
+
+This project provides a **Dockerized environment** to run **RAGBench** and its evaluation scripts with minimal setup.
+
+---
+
+## 🚀 Quickstart
+
+Build the Docker image from the project root:
+
+```bash
+docker build -t ragbench .
+```
+
+---
+
+## ▶️ Run a lexical benchmark
+
+The only command you need is (choose the config you want):
+
+```bash
+docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bm25 --config configs/[your_config].yaml
+```
+
+Example with **SciDocs**:
+
+```bash
+docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bm25 --config configs/lexical/scidocs_bm25_grid.yaml
+```
+
+---
+
+## ⚙️ Notes
+
+* `configs/` contains all experiment configurations.
+* `results/` and `figures/` will be populated automatically when you run experiments.
+* `bm25` can be replaced with another retriever alias (e.g. `dense`).
