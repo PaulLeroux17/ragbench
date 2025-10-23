@@ -1,4 +1,4 @@
-# RAGBench - Dockerized
+# RAGBench
 
 This project provides a **Dockerized environment** to run **RAGBench** and its evaluation scripts with minimal setup.
 
