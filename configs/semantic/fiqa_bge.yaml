@@ -1,4 +1,4 @@
-dataset: trec-covid
+dataset: fiqa
 split: test
 
 model: BAAI/bge-large-en-v1.5
@@ -10,6 +10,5 @@ top_k: 1000
 
 batch_size: 128
 corpus_chunk_size: 50000
-
 out_dir: "results"
 save_runfile: true
