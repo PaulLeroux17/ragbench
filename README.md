@@ -14,7 +14,7 @@ docker build -t ragbench .
 
 ## ▶️ Run a lexical benchmark
 
-The only command you need is (choose the config you want):
+To run a bm25 benchmark:
 
 ```bash
 docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bm25 --config configs/[your_config].yaml
@@ -26,10 +26,17 @@ Example with **SciDocs**:
 docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bm25 --config configs/lexical/scidocs_bm25_grid.yaml
 ```
 
----
 
-## ⚙️ Notes
+## ▶️ Run a bi-encoder benchmark
 
-* `configs/` contains all experiment configurations.
-* `results/` and `figures/` will be populated automatically when you run experiments.
-* `bm25` can be replaced with another retriever alias (e.g. `dense`).
+To run a bi-encoder benchmark:
+
+```bash
+docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bi_encoder --config configs/[your_config].yaml
+```
+
+Example with **SciDocs** and the **E5 model**:
+
+```bash
+docker run -v "`pwd`/configs:/app/configs" -v "`pwd`/results:/app/results" -v "`pwd`/figures:/app/figures" ragbench bi_encoder --config configs/semantic/scidocs_e5.yaml
+```
