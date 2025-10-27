@@ -12,7 +12,7 @@ DEFAULT_DIR = "/app/scripts"
 # Hard-coded alias mapping
 ALIASES: Dict[str, str] = {
     "bm25": "run_bm25_grid.py",
-    "dense": "run_dense.py",
+    "bi_encoder": "run_bi_encoder.py",
 }
 
 

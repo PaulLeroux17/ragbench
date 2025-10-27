@@ -1,13 +1,11 @@
-.venv
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.DS_Store
-.git
-.gitignore
 datasets/
-results/
 figures/
+results/
 .cache/
 .cache_beir/
 .cache_pyserini/

@@ -7,7 +7,7 @@ from beir.retrieval import models
 from beir.retrieval.evaluation import EvaluateRetrieval
 
 
-def build_dense_model(
+def build_bi_encoder_model(
     model_name: str,
     max_length: int,
     query_prompt: Optional[str],
@@ -33,7 +33,7 @@ def build_dense_model(
     return models.SentenceBERT(model_name, **kwargs)
 
 
-def dense_init(
+def bi_encoder_init(
     model,
     max_length,
     query_prompt,
@@ -41,15 +41,16 @@ def dense_init(
     batch_size,
     corpus_chunk_size,
     top_k,
+    score_function
 ):
-    dense_model = build_dense_model(
+    bi_encoder_model = build_bi_encoder_model(
         model, max_length, query_prompt, passage_prompt
     )
     searcher = DRES(
-        dense_model, batch_size=batch_size, corpus_chunk_size=corpus_chunk_size
+        bi_encoder_model, batch_size=batch_size, corpus_chunk_size=corpus_chunk_size
     )
     retriever = EvaluateRetrieval(
-        searcher, score_function="cos_sim"
-    )  # TODO: peut etre mettre ça plus haut
+        searcher, score_function=score_function
+    )
     retriever.top_k = top_k
     return retriever

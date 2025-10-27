@@ -13,7 +13,7 @@ import yaml
 from beir import LoggingHandler, util
 from retrieverbench.data import load_beir
 from retrieverbench.eval import evaluate_metrics
-from retrieverbench.retrieval.dense import dense_init
+from retrieverbench.retrieval.bi_encoder import bi_encoder_init
 
 
 # ===================================================================
@@ -21,7 +21,7 @@ from retrieverbench.retrieval.dense import dense_init
 # ===================================================================
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        description="Dense retrieval (config-driven) with retrieverbench."
+        description="Bi-encoder retrieval (config-driven) with retrieverbench."
     )
     ap.add_argument(
         "--config",
@@ -117,9 +117,9 @@ def main() -> None:
         logging.info(f"Limiting to MAX_QUERIES={MAX_QUERIES}")
 
     # -------------------------------------------------------------------
-    # Retriever dense
+    # Retriever bi_encoder
     # -------------------------------------------------------------------
-    retriever = dense_init(
+    retriever = bi_encoder_init(
         MODEL,
         MAX_LENGTH,
         QUERY_PROMPT,
@@ -198,7 +198,7 @@ def main() -> None:
             drop=True
         )
 
-    csv_path = OUT_DIR / f"{DATASET}__{model_slug}__dense_single.csv"
+    csv_path = OUT_DIR / f"{DATASET}__{model_slug}__bi_encoder_single.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_path, index=False)
 
