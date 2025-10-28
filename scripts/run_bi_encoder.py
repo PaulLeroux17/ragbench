@@ -3,14 +3,14 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import logging
 import numpy as np
 import pandas as pd
 import yaml
 
-from beir import LoggingHandler, util
+from beir import LoggingHandler
 from retrieverbench.data import load_beir
 from retrieverbench.eval import evaluate_metrics
 from retrieverbench.retrieval.bi_encoder import bi_encoder_init
@@ -19,6 +19,8 @@ from retrieverbench.retrieval.bi_encoder import bi_encoder_init
 # ===================================================================
 # CLI
 # ===================================================================
+
+
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Bi-encoder retrieval (config-driven) with retrieverbench."
@@ -35,13 +37,6 @@ def parse_args() -> argparse.Namespace:
 # ===================================================================
 # Utils
 # ===================================================================
-def setup_logging():
-    logging.basicConfig(
-        format="%(asctime)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=logging.INFO,
-        handlers=[LoggingHandler()],
-    )
 
 
 def slugify(s: str) -> str:
@@ -55,21 +50,44 @@ def slugify(s: str) -> str:
 
 
 def _choose_sort_metric(columns):
-    # préfère l’efficacité, sinon latence
     for m in ["NDCG@10", "MAP@10", "MRR@10", "Recall@100"]:
         if m in columns:
-            return m, False  # desc
+            return m, False
     if "avg_time_per_query_ms" in columns:
-        return "avg_time_per_query_ms", True  # asc
+        return "avg_time_per_query_ms", True
     return None, True
+
+
+def _cfg_get(cfg: Dict[str, Any], *keys, default=None):
+    for k in keys:
+        if k in cfg:
+            return cfg[k]
+    for k in keys:
+        lk, uk = k.lower(), k.upper()
+        if lk in cfg:
+            return cfg[lk]
+        if uk in cfg:
+            return cfg[uk]
+    return default
+
+
+def _write_trec_runfile(results: Dict[str, Dict[str, float]], path: Path, run_name: str = "bi-encoder"):
+    lines = []
+    for qid, doc_scores in results.items():
+        ranked = sorted(doc_scores.items(), key=lambda x: -x[1])
+        for rank, (doc_id, score) in enumerate(ranked, start=1):
+            lines.append(f"{qid} Q0 {doc_id} {rank} {score:.6f} {run_name}
+")
+    path.write_text("".join(lines), encoding="utf-8")
 
 
 # ===================================================================
 # Main
 # ===================================================================
+
+
 def main() -> None:
     args = parse_args()
-    setup_logging()
 
     cfg_path = Path(args.config)
     if not cfg_path.exists():
@@ -79,28 +97,41 @@ def main() -> None:
     with open(cfg_path, "r") as f:
         cfg = yaml.safe_load(f)
 
-    DATASET: str = cfg.get("dataset")
-    SPLIT: str = cfg.get("split")
+    # Data
+    DATASET: str = _cfg_get(cfg, "dataset")
+    SPLIT: str = _cfg_get(cfg, "split", default="test")
 
-    MODEL: str = cfg["model"]
-    QUERY_PROMPT: str = cfg.get("query_prompt")
-    PASSAGE_PROMPT: str = cfg.get("passage_prompt")
-    MAX_LENGTH: int = int(cfg.get("max_length"))
+    # Encoder backend selection
+    PROVIDER: str = str(_cfg_get(cfg, "provider", default="beir"))  # "beir" or "hf_auto"
 
-    TOP_K: int = int(cfg.get("top_k"))
+    # Model + prompts
+    MODEL: str = _cfg_get(cfg, "model")
+    QUERY_PROMPT: Optional[str] = _cfg_get(cfg, "query_prompt", "prompt_query", default=None)
+    PASSAGE_PROMPT: Optional[str] = _cfg_get(cfg, "passage_prompt", "prompt_passage", default=None)
+    MAX_LENGTH: int = int(_cfg_get(cfg, "max_length", "max_seq_length", default=512))
 
-    BATCH_SIZE: int = int(cfg.get("batch_size"))
-    CORPUS_CHUNK_SIZE: int = int(cfg.get("CORPUS_CHUNK_SIZE", 50_000))
-    MAX_QUERIES: Optional[int] = cfg.get("MAX_QUERIES", None)
-    MAX_QUERIES = (
-        None
-        if MAX_QUERIES in (None, "NONE", "Null", "null")
-        else int(MAX_QUERIES)
-    )
+    # Retrieval
+    TOP_K: int = int(_cfg_get(cfg, "top_k", default=1000))
+    SCORE_FUNCTION: str = str(_cfg_get(cfg, "score_function", default="cos_sim"))  # or "dot"
+    BATCH_SIZE: int = int(_cfg_get(cfg, "batch_size", default=128))
+    CORPUS_CHUNK_SIZE: int = int(_cfg_get(cfg, "corpus_chunk_size", "CORPUS_CHUNK_SIZE", default=50_000))
 
-    OUT_DIR = Path(cfg.get("OUT_DIR", "RESULTS"))
-    SAVE_RUNFILE: bool = bool(cfg.get("SAVE_RUNFILE", True))
-    PRINT_TOPK: int = int(cfg.get("PRINT_TOPK", 0))
+    # HF-only extras
+    POOLING: str = str(_cfg_get(cfg, "pooling", default="mean"))
+    NORMALIZE: bool = bool(_cfg_get(cfg, "normalize_embeddings", default=True))
+    DTYPE: str = str(_cfg_get(cfg, "dtype", default="auto"))  # "auto" | "float32" | "float16" | "bfloat16"
+
+    # Limits
+    MAX_QUERIES: Optional[Any] = _cfg_get(cfg, "max_queries", "MAX_QUERIES", default=None)
+    if MAX_QUERIES in (None, "NONE", "Null", "null"):
+        MAX_QUERIES = None
+    else:
+        MAX_QUERIES = int(MAX_QUERIES)
+
+    # Output
+    OUT_DIR = Path(_cfg_get(cfg, "out_dir", "OUT_DIR", default="results"))
+    SAVE_RUNFILE: bool = bool(_cfg_get(cfg, "save_runfile", "SAVE_RUNFILE", default=True))
+    PRINT_TOPK: int = int(_cfg_get(cfg, "print_topk", "PRINT_TOPK", default=0))
 
     # ===================================================================
     # Dataset
@@ -111,13 +142,12 @@ def main() -> None:
     )
 
     if MAX_QUERIES is not None and MAX_QUERIES < len(queries):
-        # conserve l’ordre stable des clés si possible
         limited_qids = list(queries.keys())[:MAX_QUERIES]
         queries = {qid: queries[qid] for qid in limited_qids}
         logging.info(f"Limiting to MAX_QUERIES={MAX_QUERIES}")
 
     # -------------------------------------------------------------------
-    # Retriever bi_encoder
+    # Retriever (bi-encoder in DRES)
     # -------------------------------------------------------------------
     retriever = bi_encoder_init(
         MODEL,
@@ -127,6 +157,11 @@ def main() -> None:
         BATCH_SIZE,
         CORPUS_CHUNK_SIZE,
         TOP_K,
+        score_function=SCORE_FUNCTION,
+        provider=PROVIDER,
+        pooling=POOLING,
+        normalize_embeddings=NORMALIZE,
+        dtype=DTYPE,
     )
 
     # -------------------------------------------------------------------
@@ -144,18 +179,17 @@ def main() -> None:
         f"retrieve() total={total_time_s:.3f}s | avg={avg_ms:.2f}ms/query | QPS={qps:.2f}"
     )
 
-    # Optionnel: afficher les top-k pour les quelques premières requêtes
     if PRINT_TOPK and PRINT_TOPK > 0:
         shown = 0
         for qid, doc_scores in results.items():
-            print(f"\n[QID={qid}] {queries[qid]}")
+            print(f"[QID={qid}] {queries[qid]}")
             for rank, (did, score) in enumerate(
                 sorted(doc_scores.items(), key=lambda x: -x[1])[:PRINT_TOPK],
                 start=1,
             ):
                 print(f"  {rank:>3}. {did}  score={score:.4f}")
             shown += 1
-            if shown >= 3:  # ne pas spammer la console
+            if shown >= 3:
                 break
 
     # -------------------------------------------------------------------
@@ -171,13 +205,15 @@ def main() -> None:
     base = f"{DATASET}__{model_slug}__ml{MAX_LENGTH}__exact__bs{BATCH_SIZE}__cc{CORPUS_CHUNK_SIZE}"
 
     if SAVE_RUNFILE:
-        util.save_runfile(str(OUT_DIR / f"{base}.run.trec"), results)
+        trec_path = OUT_DIR / f"{base}.run.trec"
+        _write_trec_runfile(results, trec_path, run_name="bi-encoder")
 
     row = {
         "dataset": DATASET,
         "split": SPLIT,
         "backend": "exact",
-        "score_function": "cos_sim",
+        "provider": PROVIDER,
+        "score_function": SCORE_FUNCTION,
         "top_k": TOP_K,
         "model": MODEL,
         "max_length": MAX_LENGTH,
@@ -194,23 +230,14 @@ def main() -> None:
 
     sort_metric, ascending = _choose_sort_metric(df.columns)
     if sort_metric is not None:
-        df = df.sort_values(sort_metric, ascending=ascending).reset_index(
-            drop=True
-        )
+        df = df.sort_values(sort_metric, ascending=ascending).reset_index(drop=True)
 
     csv_path = OUT_DIR / f"{DATASET}__{model_slug}__bi_encoder_single.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_path, index=False)
 
-    # -------------------------------------------------------------------
-    # Console summary
-    # -------------------------------------------------------------------
-    ndcg_key = next(
-        (m for m in metrics.keys() if m.lower().startswith("ndcg@")), None
-    )
-    recall_key = next(
-        (m for m in metrics.keys() if m.lower().startswith("recall@")), None
-    )
+    ndcg_key = next((m for m in metrics.keys() if m.lower().startswith("ndcg@")), None)
+    recall_key = next((m for m in metrics.keys() if m.lower().startswith("recall@")), None)
     parts = [f"[model={MODEL}, ml={MAX_LENGTH}, bs={BATCH_SIZE}]"]
     if ndcg_key:
         parts.append(f"{ndcg_key}={metrics[ndcg_key]:.4f}")
@@ -219,9 +246,10 @@ def main() -> None:
     parts.append(f"avg_search_time={row['avg_time_per_query_ms']:.3f} ms")
     print(" | ".join(parts))
 
-    print(f"\nSaved CSV to: {csv_path}")
+    print(f"
+Saved CSV to: {csv_path}")
     if SAVE_RUNFILE:
-        print(f"Saved runfile to: {OUT_DIR / f'{base}.run.trec'}")
+        print(f"Saved TREC runfile to: {trec_path}")
 
 
 if __name__ == "__main__":
